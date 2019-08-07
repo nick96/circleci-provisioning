@@ -1,0 +1,6 @@
+vcsType: gh
+owner: nick96
+projectName: test
+envVars:
+  ev1: "test"
+  ev2: "test2"
