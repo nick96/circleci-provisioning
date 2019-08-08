@@ -7,6 +7,7 @@ jobs:
   build:
     docker:
       - image: 'golang:1.12.6'
+    context: Coverage
     steps:
       - checkout
       - restore_cache:
