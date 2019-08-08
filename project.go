@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
+	"path"
 	"strings"
 
 	"bytes"
@@ -23,6 +25,7 @@ type Project interface {
 	AddSSHKey(name string, privateKey string) error
 	GetSSHKeyFingerprint(name string) (string, error)
 	RemoveSSHKey(name string) error
+	ClearSSHKeys() error
 	Trigger() error
 }
 
@@ -35,6 +38,7 @@ type CircleCIProject struct {
 	client      http.Client
 }
 
+// NewCircleCIProject creates a Circle CI project representation.
 func NewCircleCIProject(vcsType, owner, projectName, token string) *CircleCIProject {
 	return &CircleCIProject{
 		vcsType:     vcsType,
@@ -45,6 +49,14 @@ func NewCircleCIProject(vcsType, owner, projectName, token string) *CircleCIProj
 	}
 }
 
+// fmtURI formats a URI to be used for Circle CI API requests.
+func (p *CircleCIProject) fmtURI(resource, action string) string {
+	url, _ := url.Parse("https://circleci.com/api/v1.1")
+	url.Path = path.Join(url.Path, resource, p.vcsType, p.owner, p.projectName, action)
+	url.Query().Set("circle-token", p.token)
+	return url.String()
+}
+
 // FullName returns the full name of the project
 func (p *CircleCIProject) FullName() string {
 	return fmt.Sprintf("%s/%s", p.owner, p.projectName)
@@ -52,8 +64,7 @@ func (p *CircleCIProject) FullName() string {
 
 // Follow follows the project
 func (p *CircleCIProject) Follow() error {
-	url := fmt.Sprintf("https://circleci.com/api/v1.1/project/%s/%s/%s/follow?circle-token=%s",
-		p.vcsType, p.owner, p.projectName, p.token)
+	url := p.fmtURI("project", "follow")
 	resp, err := http.Post(url, "", strings.NewReader(""))
 	if err != nil {
 		return fmt.Errorf("could not follow project %s: %v", p.FullName(), err)
@@ -66,9 +77,25 @@ func (p *CircleCIProject) Follow() error {
 	return nil
 }
 
+// Unfollow unfollows the project.
+func (p *CircleCIProject) Unfollow() error {
+	url := p.fmtURI("project", "unfollow")
+	resp, err := p.client.Post(url, "", strings.NewReader(""))
+	if err != nil {
+		return fmt.Errorf("could not unfollow project: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("expected status %s, found %s", http.StatusOK, resp.Status)
+	}
+
+	return nil
+}
+
+// Setenv sets an environment variable in a project
 func (p *CircleCIProject) Setenv(name, value string) error {
-	url := fmt.Sprintf("https://circleci.com/api/v1.1/project/%s/%s/%s/envvar?circle-token=%s",
-		p.vcsType, p.owner, p.projectName, p.token)
+	url := p.fmtURI("project", "envvar")
 	body := fmt.Sprintf(`{"name": "%s", "value": "%s"}`, name, value)
 	resp, err := http.Post(url, "application/json", strings.NewReader(body))
 	if err != nil {
@@ -82,6 +109,7 @@ func (p *CircleCIProject) Setenv(name, value string) error {
 	return nil
 }
 
+// Clearenv removes all environment variables from a project.
 func (p *CircleCIProject) Clearenv() error {
 	envVars, err := p.Getenvs()
 	if err != nil {
@@ -98,13 +126,14 @@ func (p *CircleCIProject) Clearenv() error {
 	return nil
 }
 
+// Getenv gets the named environment variable in a project.
 func (p *CircleCIProject) Getenv(name string) (string, error) {
 	return "", nil
 }
 
+// Getenvs gets all the environment variables in the project.
 func (p *CircleCIProject) Getenvs() (map[string]string, error) {
-	url := fmt.Sprintf("https://circleci.com/api/v1.1/project/%s/%s/%s/envvar?circle-token=%s",
-		p.vcsType, p.owner, p.projectName, p.token)
+	url := p.fmtURI("project", "envvar")
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("could not get environment variables for project %s: %v", p.FullName(), err)
@@ -139,9 +168,9 @@ func (p *CircleCIProject) Getenvs() (map[string]string, error) {
 	return envVars, nil
 }
 
+// Deleteenv deletes the named environment variable in the project.
 func (p *CircleCIProject) Deleteenv(name string) error {
-	url := fmt.Sprintf("https://circleci.com/api/v1.1/project/%s/%s/%s/envvar?circle-token=%s",
-		p.vcsType, p.owner, p.projectName, p.token)
+	url := p.fmtURI("project", "envvar")
 	client := http.Client{}
 	req, err := http.NewRequest(http.MethodDelete, url, strings.NewReader(""))
 	if err != nil {
@@ -176,9 +205,9 @@ func (p *CircleCIProject) Deleteenv(name string) error {
 	return nil
 }
 
+// AddSSHKey adds an ssh key.
 func (p *CircleCIProject) AddSSHKey(name, privateKey string) error {
-	url := fmt.Sprintf("https://circleci.com/api/v1.1/project/%s/%s/%s/ssh-key?circle-token=%s",
-		p.vcsType, p.owner, p.projectName, p.token)
+	url := p.fmtURI("project", "ssh-key")
 	postBody := struct {
 		hostname   string
 		privateKey string `json:"private_key"`
@@ -201,17 +230,19 @@ func (p *CircleCIProject) AddSSHKey(name, privateKey string) error {
 	return nil
 }
 
+// GetSSHKeyFingerprint gets the fingerprint of the named SSH key.
 func (p *CircleCIProject) GetSSHKeyFingerprint(name string) (string, error) {
 	return "", fmt.Errorf("Not implemented")
 }
 
+// RemoveSSHKey removes the named SSH key from the project.
 func (p *CircleCIProject) RemoveSSHKey(name string) error {
 	return fmt.Errorf("Not implemented")
 }
 
+// Trigger triggers a build of the project
 func (p *CircleCIProject) Trigger() error {
-	url := fmt.Sprintf("https://circleci.com/api/v1.1/project/%s/%s/%s/build?circle-token=%s",
-		p.vcsType, p.owner, p.projectName, p.token)
+	url := p.fmtURI("project", "build")
 	resp, err := http.Post(url, "", strings.NewReader(""))
 	if err != nil {
 		return fmt.Errorf("could not trigger build of project %s: %v", p.FullName(), err)
@@ -243,4 +274,9 @@ func (p *CircleCIProject) Trigger() error {
 	}
 
 	return nil
+}
+
+// ClearSSHKeys clears all SSH keys for the project.
+func (p *CircleCIProject) ClearSSHKeys() error {
+	return fmt.Errorf("Not implemented")
 }
