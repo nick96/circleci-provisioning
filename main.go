@@ -61,7 +61,7 @@ func main() {
 	project := NewCircleCIProject(config.VcsType, config.Owner, config.ProjectName, *token)
 
 	if *shouldUnfollow {
-		log.Printf("Unfollowing %s", project.FullName)
+		log.Printf("Unfollowing %s", project.FullName())
 		project.Unfollow()
 		return
 	}
@@ -69,14 +69,14 @@ func main() {
 	log.Printf("Following %s", project.FullName())
 	err = project.Follow()
 	if err != nil {
-		log.Fatalf("Error: Could not follow %s: %v", project, err)
+		log.Fatalf("Error: Could not follow %s: %v", project.FullName(), err)
 	}
 
 	if *isCanonical {
 		log.Printf("Making config %s canonical for project %s", *configFile, project.FullName())
 		err = cleanProject(project)
 		if err != nil {
-			log.Fatalf("Error: Could not make config %s canonical for project %s",
+			log.Fatalf("Error: Could not make config %s canonical for project %s: %v",
 				*configFile, project.FullName(), err)
 		}
 	}
@@ -87,7 +87,7 @@ func main() {
 		log.Fatalf("Error: Could not set environment variables for project %s: %v", project.FullName(), err)
 	}
 
-	log.Printf("Adding ssh keys for project %s", project)
+	log.Printf("Adding ssh keys for project %s", project.FullName())
 	err = addSSHKeys(project, config.SSHKeys)
 	if err != nil {
 		log.Fatalf("Error: Could not add SSH Keys for project %s: %v", project.FullName(), err)
@@ -137,7 +137,7 @@ func addSSHKeys(project Project, sshKeys map[string]string) error {
 		}
 		err = project.AddSSHKey(name, string(content))
 		if err != nil {
-			return fmt.Errorf("could not add SSH key %s for project %s: %v", path, err)
+			return fmt.Errorf("could not add SSH key %s for project %s: %v", path, project.FullName(), err)
 		}
 	}
 	return nil
@@ -163,7 +163,7 @@ func setEnvVars(project Project, envVars map[string]string) error {
 		err := project.Setenv(k, v)
 		if err != nil {
 			return fmt.Errorf("could not set environment variable %s for project %s: %v",
-				k, project.FullName, err)
+				k, project.FullName(), err)
 		}
 	}
 	return nil

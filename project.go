@@ -53,7 +53,9 @@ func NewCircleCIProject(vcsType, owner, projectName, token string) *CircleCIProj
 func (p *CircleCIProject) fmtURI(resource, action string) string {
 	url, _ := url.Parse("https://circleci.com/api/v1.1")
 	url.Path = path.Join(url.Path, resource, p.vcsType, p.owner, p.projectName, action)
-	url.Query().Set("circle-token", p.token)
+	query := url.Query()
+	query.Set("circle-token", p.token)
+	url.RawQuery = query.Encode()
 	return url.String()
 }
 
@@ -87,7 +89,7 @@ func (p *CircleCIProject) Unfollow() error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("expected status %s, found %s", http.StatusOK, resp.Status)
+		return fmt.Errorf("expected status %d, found %d", http.StatusOK, resp.StatusCode)
 	}
 
 	return nil
@@ -146,7 +148,7 @@ func (p *CircleCIProject) Getenvs() (map[string]string, error) {
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("could not read response body to get environment variables for project %s",
+		return nil, fmt.Errorf("could not read response body to get environment variables for project %s: %v",
 			p.FullName(), err)
 	}
 
@@ -156,7 +158,7 @@ func (p *CircleCIProject) Getenvs() (map[string]string, error) {
 	}
 	err = json.Unmarshal(body, &results)
 	if err != nil {
-		return nil, fmt.Errorf("could not unmarshall response body to get environment variables for project %s",
+		return nil, fmt.Errorf("could not unmarshall response body to get environment variables for project %s: %v",
 			p.FullName(), err)
 	}
 
@@ -188,13 +190,13 @@ func (p *CircleCIProject) Deleteenv(name string) error {
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("could not read response: %v", name, err)
+		return fmt.Errorf("could not read response: %v", err)
 	}
 
 	var status struct{ message string }
 	err = json.Unmarshal(body, &status)
 	if err != nil {
-		return fmt.Errorf("could not unmarshal response: %v", name, err)
+		return fmt.Errorf("could not unmarshal response: %v", err)
 	}
 
 	if status.message != "ok" {
@@ -209,11 +211,11 @@ func (p *CircleCIProject) Deleteenv(name string) error {
 func (p *CircleCIProject) AddSSHKey(name, privateKey string) error {
 	url := p.fmtURI("project", "ssh-key")
 	postBody := struct {
-		hostname   string
-		privateKey string `json:"private_key"`
+		Hostname   string `json:"hostname"`
+		PrivateKey string `json:"private_key"`
 	}{
-		hostname:   name,
-		privateKey: privateKey,
+		Hostname:   name,
+		PrivateKey: privateKey,
 	}
 	postBodyJSON, err := json.Marshal(postBody)
 
