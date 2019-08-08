@@ -11,7 +11,7 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - v1-pkg-{{ checksum go.mod }}-cache
+            - v1-pkg-{{ checksum "go.mod" }}-cache
       - run:
           name: Install linters
           command: |
@@ -21,7 +21,7 @@ jobs:
           name: Get dependencies
           command: go get
       - save_cache:
-          key: v1-pkg-{{ checksum go.mod }}-cache
+          key: v1-pkg-{{ checksum "go.mod" }}-cache
           paths:
             - /go/pkg
       - run: go vet
