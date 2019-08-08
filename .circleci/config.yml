@@ -1,0 +1,30 @@
+version: 2.1
+jobs:
+  build_test:
+    docker:
+      - image: golang: 1.12.6
+    steps:
+      - checkout
+      - restore_keys:
+          keys:
+            - v1-pkg-{{ checksum go.mod }}-cache
+      - run:
+          name: Install linters
+          command: |
+            go get -u golang.org/x/lint/golint
+            go get -u github.com/timakin/bodyclose
+      - run:
+          name: Get dependencies
+          command: go get
+      - save_cache:
+          key: v1-pkg-{{ checksum go.mod }}-cache
+          paths:
+            - /go/pkg
+      - run: go vet
+      - run: go vet -vettool=$(which bodyclose)
+      - run: golint ./...
+      - run: go test
+      - run: go build
+      - store_artifacts:
+          path: circleci-provision
+          destination: build-artifact
